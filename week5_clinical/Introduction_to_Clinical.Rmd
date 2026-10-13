@@ -16,7 +16,9 @@ Set your working directory below:
 
 ```{r setup}
     #TODO: fill in file path to analysis_data 
-    knitr::opts_knit$set(root.dir = normalizePath("/PATH/TO/analysis_data")) 
+    knitr::opts_knit$set(
+  root.dir = normalizePath("/home1/pramkuma/490_cluster/analysis_data")
+)
 ```
 
 Before you move on, go to your GitHub web browser, open your .gitignore, and make sure the following files are listed. 
