@@ -1,0 +1,236 @@
+---
+title: "Introduction to MAF"
+author: Joshua Lin, Christopher Kim, Erika Li, Jeanne Revilla, Mahija Mogalipuvvu, adapted from Nicole Black, Wade Boohar
+date: 07/17/22
+updated: 10/12/2026
+---
+
+***Working with a partner: Pragnya Ramkumar & Marcela Hernandez***
+
+***Deliverables***
+- upload this R Notebook to your GitHub and submit the link to your Repo on Brightspace
+- include ALL graphs or figures created in this assignment in a folder with your R notebook with descriptive file names.
+
+We encourage you to work with a partner. Therefore, it is okay if your answers are the same as your partner’s as long as everyone understands it and could explain it in their own words if asked. Each person must individually push their code to Github. *If you do work with a partner, at the top of your R Notebook, write the name of you and your partner(s) as a comment.*
+
+***Complete the following coding activity and answer any following questions as comments in your R Notebook***
+
+In this assignment, you will need to use your skills learned in class to demonstrate your understanding of categorical variables and R data structures.
+
+*Pre-Assignment*
+Load all necessary packages, read in the clinical data.csv file you have in your analysis_data folder, and instantiate the MAF_object.
+```{r}
+library(TCGAbiolinks)
+library(maftools)
+
+clinic <- read.csv(
+  "/home1/pramkuma/490_cluster/analysis_data/brca_clinical_data.csv"
+)
+
+maf_object <- readRDS(
+  "/home1/pramkuma/490_cluster/analysis_data/brca_maf_object.rds"
+)
+
+head(clinic)
+dim(clinic)
+class(maf_object)
+```
+
+
+It's useful to save your MAF_object, so that you don't have to go through the trouble of querying and preparing it everytime. The saveRDS function allows us to save an R object, allowing us to access it directly from our files. 
+```{r}
+saveRDS(
+  maf_object,
+  file = "/home1/pramkuma/490_cluster/analysis_data/brca_maf_object.rds"
+)
+```
+
+When you reopen a new R session and want to access your MAF_object, you can use the readRDS function to load the object back into a new variable.
+```{r}
+maf_object <- readRDS(
+  file = "/home1/pramkuma/490_cluster/analysis_data/brca_maf_object.rds"
+)
+```
+*1*
+Choose a clinical variable (or any variable from clin_rad or clin_drug) to separate your populations into two different groups and rewrite the column or create a new column with that variable as a factor. ***Do not use age or vital_status as your clinical variable.*** Hint: if your variable is continuous, you will need to determine your own cutoffs for the different levels of the factor. If your variable is categorical and has more than two possible values, choose the two that are the most common.
+```{r}
+clinic$history_other_malignancy <- factor(
+  clinic$history_other_malignancy,
+  levels = c("No", "Yes"))
+clinic <- clinic[!is.na(clinic$history_other_malignancy),]
+```
+
+*2*
+Create a co-oncoplot with the top 10-20 (you choose) most mutated genes for the two groups. Pick one that has a large discrepancy in % mutated or type of mutations between the groups and research it. 
+Research it. What is the gene used for? Can you think of any reason for the discrepancy?
+```{r, fig.width=22, fig.height=11}
+patients_no <- clinic$Tumor_Sample_Barcode[
+  clinic$history_other_malignancy == "No"
+]
+
+patients_yes <- clinic$Tumor_Sample_Barcode[
+  clinic$history_other_malignancy == "Yes"
+]
+
+m1 <- subsetMaf(maf_object, tsb = patients_no)
+m2 <- subsetMaf(maf_object, tsb = patients_yes)
+
+
+coOncoplot(
+  m1 = m1,
+  m2 = m2,
+  m1Name = "No History",
+  m2Name = "Cancer History",
+  genes = getGeneSummary(maf_object)$Hugo_Symbol[1:15],
+  gene_mar = 4,
+  outer_mar = 8,
+  geneNamefont = 0.8,
+  titleFontSize = 0.9,
+  legendFontSize = 0.8
+)
+```
+
+
+*3*
+Create a contingency table with your variable and chosen gene. Run a Fisher’s Exact Test between presence of mutations for that gene and your clinical variable. Create and save a mosaic plot. 
+Interpret the output of the Fisher’s Exact Test in terms of the odds ratio and p-value.
+```{r}
+cdh1_samples <- unique(
+  maf_object@data$Tumor_Sample_Barcode[
+    maf_object@data$Hugo_Symbol == "CDH1"
+  ]
+)
+
+clinic$CDH1_mutation <- ifelse(
+  clinic$Tumor_Sample_Barcode %in% cdh1_samples,
+  "Mutated",
+  "Not mutated"
+)
+
+clinic$CDH1_mutation <- factor(
+  clinic$CDH1_mutation,
+  levels = c("Mutated", "Not mutated")
+)
+
+contingency_table <- table(
+  clinic$history_other_malignancy,
+  clinic$CDH1_mutation
+)
+
+contingency_table
+
+fisher_result <- fisher.test(contingency_table)
+fisher_result
+
+png("CDH1_mosaic_plot.png", width = 1000, height = 800)
+
+mosaicplot(
+  contingency_table,
+  main = "CDH1 Mutations",
+  xlab = "History of Other Malignancy",
+  ylab = "CDH1 Mutation Status",
+  color = c("lightblue", "salmon"),
+  las = 1
+)
+
+dev.off()
+```
+*Interpretation*
+The p-value of 0.005068 is below the threshold of 0.05, indicating a statistically significant relationship between CDH1 mutation status and history of anohter previous malignancy. 
+
+*4*
+Subset your maf_object based on your chosen clinical variable and create a co-lollipop plot of your chosen gene divided between the two different clinical variable possibilities. Include descriptive names on your plot.
+Do you notice any difference in terms of mutations (e.g. sites, types, number) between the two populations?
+```{r}
+# Subset the MAF object by clinical group
+m1 <- subsetMaf(
+  maf = maf_object,
+  tsb = patients_no
+)
+
+m2 <- subsetMaf(
+  maf = maf_object,
+  tsb = patients_yes
+)
+
+
+lollipopPlot2(
+  m1 = m1,
+  m2 = m2,
+  gene = "CDH1",
+  m1_name = "No History",
+  m2_name = "History"
+)
+```
+*Interpretation*
+There are differences between the two populations in terms of mutations. For the no history population, 12.53% have a CDH1 mutation, but in the yes history population, 27.12% have a CDH1 mutation, which is a significant difference. 
+
+*5*
+Create your Overall_Survival_Status column and create a mafSurvival KM plot based on mutations in your chosen gene.
+Does there seem to be a difference? Hypothesize why or not based on the other analysis you did with the gene above.
+```{r}
+clinic$Overall_Survival_Status <- ifelse(
+  clinic$vital_status == "Dead", 1, 0
+)
+
+clinic$Overall_Survival_Time <- ifelse(
+  clinic$vital_status == "Dead",
+  clinic$death_days_to,
+  clinic$last_contact_days_to
+)
+
+mafSurvival(
+  maf = maf_object,
+  clinicalData = clinic,
+  genes = "CDH1",
+  time = "Overall_Survival_Time",
+  Status = "Overall_Survival_Status",
+  isTCGA = FALSE
+)
+```
+*Interpretation*
+No, there does not seem to be a large difference between survival rate for patients with and without CDH1 mutations, because the blue and red lines overlap significantly and are relatively close together. Connecting this back to our lollipop plot, it showed a sizable number of missense mutations. However, many missense mutations do not significantly impact a protein's overall structure/function, allowing the overall negative impact of CDH1 mutations to be minimized. 
+
+```{r}
+png("figures/CDH1_mosaic_plot.png", width = 1000, height = 800)
+
+mosaicplot(
+  contingency_table,
+  main = "CDH1 Mutations",
+  xlab = "History of Other Malignancy",
+  ylab = "CDH1 Mutation Status",
+  color = c("lightblue", "salmon"),
+  las = 1
+)
+
+dev.off()
+```
+
+```{r}
+png("figures/CDH1_lollipop_plot.png", width = 1200, height = 900)
+
+lollipopPlot2(
+  m1 = m1,
+  m2 = m2,
+  gene = "CDH1",
+  m1_name = "No History",
+  m2_name = "History of Other Malignancy"
+)
+
+dev.off()
+```
+```{r}
+png("figures/CDH1_survival_plot.png", width = 1200, height = 900)
+
+mafSurvival(
+  maf = maf_object,
+  clinicalData = clinic,
+  genes = "CDH1",
+  time = "Overall_Survival_Time",
+  Status = "Overall_Survival_Status",
+  isTCGA = FALSE
+)
+
+dev.off()
+```
+
